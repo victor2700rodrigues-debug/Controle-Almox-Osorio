@@ -1643,7 +1643,7 @@ function vAderencia(){
     ${A.prog.length?`<div class="tablebox"><table><thead><tr><th>PEP / Reserva</th><th>Equipe</th><th>OBS</th><th>Etapa</th><th>Execução</th><th>Motivo / observação</th><th></th></tr></thead><tbody>${A.prog.map(linhaProg).join('')}</tbody></table></div>`:'<p class="muted">Nenhuma retirada programada para este dia.</p>'}</section>
   <section class="panel"><div class="head"><div><span class="lbl">Não programadas</span><h2>Inseridas fora da programação</h2></div><span class="pill ${A.extra.length?'warn':'neu'}">${A.extra.length}</span></div>
     ${A.extra.length?`<div class="tablebox"><table><thead><tr><th>PEP / Reserva</th><th>Equipe</th><th>Etapa</th><th>Execução</th><th>Motivo da inclusão</th><th></th></tr></thead><tbody>${A.extra.map(linhaExtra).join('')}</tbody></table></div>`:'<p class="muted">Nenhuma retirada fora da programação neste dia.</p>'}
-    <div class="fields addx"><div class="field"><label class="lbl" for="axPep">PEP</label><input id="axPep" placeholder="RS-..."></div><div class="field"><label class="lbl" for="axRes">Reserva</label><input id="axRes" inputmode="numeric"></div><div class="field"><label class="lbl" for="axEq">Equipe</label><input id="axEq" placeholder="Opcional"></div>
+    <div class="fields addx"><div class="field"><label class="lbl" for="axPep">PEP</label><input id="axPep" placeholder="RS-..."></div><div class="field"><label class="lbl" for="axRes">Reserva</label><input id="axRes" inputmode="numeric"></div><div class="field"><label class="lbl" for="axData">Data programada</label><input id="axData" type="date" value="${esc(ST.adData||hoje())}"></div><div class="field"><label class="lbl" for="axEq">Equipe</label><input id="axEq" placeholder="Opcional"></div>
       <div class="field"><label class="lbl" for="axSt">Etapa</label><select id="axSt">${STATUS.filter(s=>s.k!=='baixada').map(s=>`<option value="${s.k}" ${s.k==='separada'?'selected':''}>${s.t}</option>`).join('')}</select></div><div class="field" style="grid-column:span 2"><label class="lbl" for="axMot">Motivo da inclusão</label><input id="axMot" list="dlExecM" placeholder="Ex.: Inserida pela programação do dia"></div></div>
     <div class="actions"><button class="btn pri" data-act="ad-add">Adicionar retirada fora da programação</button></div></section>
   <section class="panel"><div class="head"><div><span class="lbl">Histórico</span><h2>Aderência por dia</h2></div><span class="muted">clique no dia para abrir</span></div>
@@ -1834,11 +1834,11 @@ function linhaObra(o){
 }
 function vObras(){
   if(ST.obraSel){const o=ST.obras.find(x=>x.id===ST.obraSel);if(o)return vObra(o);ST.obraSel=null;}
-  const filtros=[['abertas','Abertas'],...STATUS.map(s=>[s.k,s.t]),['todas','Todas']];
+  const nFora=ST.obras.filter(ehExtra).length;const filtros=[['abertas','Abertas'],...STATUS.map(s=>[s.k,s.t]),['fora','Fora da prog.'+(nFora?' ('+nFora+')':'')],['todas','Todas']];
   const b=norm(ST.buscaObra);
-  let lista=ST.obras.filter(o=>ST.filtroStatus==='todas'?true:ST.filtroStatus==='abertas'?aberta(o):o.status===ST.filtroStatus);
+  let lista=ST.obras.filter(o=>ST.filtroStatus==='todas'?true:ST.filtroStatus==='abertas'?aberta(o):ST.filtroStatus==='fora'?ehExtra(o):o.status===ST.filtroStatus);
   if(b)lista=lista.filter(o=>norm([o.numero,o.pep,o.reserva,o.descricao,o.equipe,o.tipo].join(' ')).includes(b));
-  lista.sort(ordem); const desc=ST.filtroStatus==='baixada'||ST.filtroStatus==='todas'; if(desc)lista.reverse();
+  lista.sort(ordem); const desc=ST.filtroStatus==='baixada'||ST.filtroStatus==='todas'||ST.filtroStatus==='fora'; if(desc)lista.reverse();
   const grupos=[];for(const o of lista){const g=grupos[grupos.length-1];if(g&&g.data===(o.data||''))g.obras.push(o);else grupos.push({data:o.data||'',obras:[o]});}
   const corpo=grupos.map(g=>{const d=diaRel(g.data);const abertas=g.obras.filter(o=>stIdx(o.status)<2&&itensExpedicao(o).length);
     return `<tr class="grp"><td colspan="6"><div class="grp-in"><span class="grp-d">${esc(d.txt||d)}</span>${d.rel?`<span class="pill ${d.rel==='Atrasada'?'bad':d.rel==='Hoje'?'acc':'neu'}">${d.rel}</span>`:''}<span class="muted">${g.obras.length} retirada${g.obras.length>1?'s':''}</span>${abertas.length?`<button class="btn sm" data-act="sep-dia" data-data="${esc(g.data)}">Expedição do dia (${abertas.length})</button>`:''}</div></td></tr>`+g.obras.map(linhaObra).join('');}).join('');
@@ -2103,8 +2103,8 @@ main.addEventListener('click',async e=>{
     case 'ad-prog':{const ob=ST.obras.find(x=>x.id===a.dataset.id);if(ob){ob.origem='prog';ST.confirm=null;Store.saveObra(ob,0);toast('Movida para as programadas.');render();}break;}
     case 'ad-extra':{const ob=ST.obras.find(x=>x.id===a.dataset.id);if(ob){ob.origem='extra';ST.confirm=null;Store.saveObra(ob,0);toast('Marcada como fora da programação.');render();}break;}
     case 'ad-add':{const pep=document.getElementById('axPep').value.trim(),res=document.getElementById('axRes').value.trim();if(!pep&&!res){toast('Informe o PEP ou a reserva.','bad');break;}
-      const n={id:uid(),origem:'extra',numero:pep||res,pep,reserva:res,tipo:'FORA DA PROGRAMAÇÃO',descricao:'',equipe:document.getElementById('axEq').value.trim(),data:ST.adData||hoje(),status:document.getElementById('axSt').value,execMotivo:document.getElementById('axMot').value.trim(),itens:[],criado:Date.now()};
-      ST.obras.push(n);Store.saveObra(n,0);toast('Retirada '+(res||pep)+' registrada fora da programação.');render();break;}
+      const n={id:uid(),origem:'extra',numero:pep||res,pep,reserva:res,tipo:'FORA DA PROGRAMAÇÃO',descricao:'',equipe:document.getElementById('axEq').value.trim(),data:document.getElementById('axData').value||ST.adData||hoje(),status:document.getElementById('axSt').value,execMotivo:document.getElementById('axMot').value.trim(),itens:[],criado:Date.now()};
+      ST.obras.push(n);Store.saveObra(n,0);ST.adData=n.data;toast('Retirada '+(res||pep)+' registrada fora da programação em '+fdata(n.data)+'.');render();break;}
     case 'conf-tudo':if(o){ST.formRev=(ST.formRev||0)+1;analisar(o).forEach(l=>{if(l.sit!=='ret')o.itens[l._j].separado=l.pend;});Store.saveObra(o,0);render();}break;
     case 'conf-reabrir':if(o){delete o.sepConf;Store.saveObra(o,0);render();}break;
     case 'conf-ok':if(o){const P=analisar(o).filter(l=>l.sit!=='ret');
